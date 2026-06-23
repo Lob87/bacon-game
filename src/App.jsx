@@ -475,34 +475,40 @@ async function searchMovies(query) {
   if (!query || query.length < 2) return [];
   const q = query.toLowerCase().trim();
 
-  // Search MOVIE_INDEX (477k movies) — much faster and more complete than
-  // searching paths in BACON_DB
   if (MOVIE_INDEX && Object.keys(MOVIE_INDEX).length > 0) {
-    const startsWith = [];
-    const contains = [];
+    const exact = [], startsWith = [], wordStarts = [], contains = [];
+
     for (const title of Object.keys(MOVIE_INDEX)) {
-      if (title.startsWith(q)) startsWith.push(title);
-      else if (title.includes(q)) contains.push(title);
-      if (startsWith.length >= 10) break;
+      if (title === q) { exact.push(title); continue; }
+      if (title.startsWith(q)) { startsWith.push(title); continue; }
+      const words = title.split(" ");
+      if (words.some(w => w.startsWith(q))) { wordStarts.push(title); continue; }
+      if (title.includes(q)) contains.push(title);
     }
-    // Combine starts-with first, then contains, capitalise properly
-    const combined = [...startsWith, ...contains];
+
+    const getYear = t => { const m = t.match(/\((\d{4})\)$/); return m ? parseInt(m[1]) : 0; };
+    const sortNewest = arr => arr.sort((a, b) => getYear(b) - getYear(a));
+    sortNewest(startsWith);
+    sortNewest(wordStarts);
+    sortNewest(contains);
+
+    const combined = [...exact, ...startsWith, ...wordStarts, ...contains];
     const seen = new Set();
     const results = [];
+    const skipWords = new Set(["a","an","the","and","but","or","for","of","in","on","at","to","with"]);
     for (const t of combined) {
       if (!seen.has(t)) {
         seen.add(t);
-        // Restore proper capitalisation from the index key
-        // (keys are lowercase, but MOVIE_INDEX values don't store the title)
-        // Use title-case as best effort
-        results.push(t.replace(/\w/g, c => c.toUpperCase()));
+        const titled = t.split(" ").map((w, i) =>
+          i === 0 || !skipWords.has(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w
+        ).join(" ");
+        results.push(titled);
       }
       if (results.length >= 10) break;
     }
     if (results.length > 0) return results;
   }
 
-  // Fallback: search paths in BACON_DB
   if (BACON_DB && Object.keys(BACON_DB).length > 0) {
     const seen = new Set();
     const results = [];
@@ -518,7 +524,7 @@ async function searchMovies(query) {
       }
     }
     return results;
-  }
+
 
   return [];
 }
