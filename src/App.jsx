@@ -1056,6 +1056,39 @@ function useTimer(active, initialSeconds, onExpire, soundEnabled, audioRef) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// REPORT BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+const WORKER_URL = "https://bacon-report-api.larsbrunsvold.workers.dev";
+
+function ReportButton({connection}) {
+  const [status, setStatus] = useState("idle"); // idle | sending | sent | error
+
+  async function sendReport() {
+    setStatus("sending");
+    try {
+      const res = await fetch(`${WORKER_URL}/report`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(connection),
+      });
+      if (res.ok) setStatus("sent");
+      else setStatus("error");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  if (status === "sent") return <div className="report-btn" style={{opacity:0.6,cursor:"default"}}>✅ Reported — thanks!</div>;
+  if (status === "error") return <div className="report-btn" style={{opacity:0.6,cursor:"default"}}>❌ Could not send report</div>;
+
+  return (
+    <button className="report-btn" onClick={sendReport} disabled={status==="sending"}>
+      {status==="sending" ? "⏳ Sending…" : "🚩 Report this as a valid connection"}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -1090,6 +1123,7 @@ export default function App() {
   const [movieInput,setMovieInput]=useState("");
   const [error,setError]=useState("");
   const [statusMsg,setStatusMsg]=useState("");
+  const [lastFailed,setLastFailed]=useState(null); // {actorA, movie, actorB}
   const [shake,setShake]=useState(false);
   const [flash,setFlash]=useState("");
 
@@ -1297,6 +1331,7 @@ export default function App() {
       setPhase("playing");
       setStatusMsg("");
       setError(`✗ ${result.reason}`);
+      setLastFailed({actorA:currentActor, movie, actorB:actor});
       triggerShake(); triggerFlash("error"); audio.playError();
       if(gameMode==="timed"){
         // Penalty: subtract 15s
@@ -1312,7 +1347,7 @@ export default function App() {
     setUndoStack(u=>[...u,{chain:[...chain],currentActor}]);
     const newChain=[...chain,{from:currentActor,movie,to:actor}];
     setChain(newChain); setMovieInput(""); setActorInput("");
-    setHintData(null); setPreviousHints([]); audio.playClick();
+    setHintData(null); setPreviousHints([]); setLastFailed(null); audio.playClick();
 
     const isTarget=actor.toLowerCase().replace(/\s/g,"")===(targetActor.toLowerCase().replace(/\s/g,""));
     const deg=newChain.length;
@@ -1560,7 +1595,14 @@ export default function App() {
             <AutocompleteInput label="Movie they share together" placeholder='e.g. "Apollo 13"'
               value={movieInput} onChange={setMovieInput} onSelect={setMovieInput}
               disabled={phase==="verifying"} type="movie" onKeyDown={handleKeyDown}/>
-            {error&&<div className="error-msg">{error}</div>}
+            {error&&(
+              <div>
+                <div className="error-msg">{error}</div>
+                {lastFailed&&(
+                  <ReportButton connection={lastFailed}/>
+                )}
+              </div>
+            )}
             {statusMsg&&<div className="status-msg">{statusMsg}</div>}
 
             <button className="btn-primary" onClick={handleSubmit} disabled={phase==="verifying"} style={{width:"100%"}}>
@@ -1948,6 +1990,10 @@ body{background:${bg};color:${text};font-family:'DM Mono',monospace;min-height:1
 .shake{animation:shake 0.4s cubic-bezier(0.36,0.07,0.19,0.97);}
 @keyframes shake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(4px);}30%,50%,70%{transform:translateX(-6px);}40%,60%{transform:translateX(6px);}}
 .error-msg{color:#e05555;font-size:0.79rem;line-height:1.5;}
+.report-btn{margin-top:6px;background:transparent;border:1px dashed #e05555;
+  border-radius:8px;padding:6px 12px;font-family:'DM Mono',monospace;font-size:0.72rem;
+  color:#e05555;cursor:pointer;transition:all 0.2s;opacity:0.7;width:100%;}
+.report-btn:hover{opacity:1;background:rgba(224,85,85,0.08);}
 .status-msg{color:${muted};font-size:0.79rem;line-height:1.5;}
  `;
 }
