@@ -11,7 +11,7 @@ const path     = require("path");
 
 const KEVIN_BACON_ID    = "nm0000102";
 const MAX_DEGREES       = 6;
-const MAX_CAST_PER_FILM = 30;
+const MAX_CAST_PER_FILM = 50;
 
 function streamTSV(filename, onRow) {
   return new Promise((resolve, reject) => {
@@ -46,8 +46,7 @@ async function main() {
     if (!row.primaryProfession) return;
     const profs = row.primaryProfession.split(",");
     if (!profs.includes("actor") && !profs.includes("actress")) return;
-    const credits = row.knownForTitles ? row.knownForTitles.split(",").filter(Boolean).length : 0;
-    if (credits < 2 && row.nconst !== KEVIN_BACON_ID) return;
+    // Keep all actors — even those with few credits may be important connectors
     idToName[row.nconst] = row.primaryName;
   });
   console.log(`   Kept ${Object.keys(idToName).length.toLocaleString()} actors`);

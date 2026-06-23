@@ -315,11 +315,12 @@ function loadBaconDB() {
   if (baconDBLoadPromise) return baconDBLoadPromise;
   const DB_BASE = "https://pub-91a53781e81e4fa4a098787a7af01773.r2.dev";
   baconDBLoadPromise = Promise.all([
-    fetch(`${DB_BASE}/bacon-db.json`).then(r => r.ok ? r.json() : {}),
+    fetch(`${DB_BASE}/bacon-db-1.json`).then(r => r.ok ? r.json() : {}),
+    fetch(`${DB_BASE}/bacon-db-2.json`).then(r => r.ok ? r.json() : {}),
     fetch(`${DB_BASE}/movie-index.json`).then(r => r.ok ? r.json() : {}),
   ])
-    .then(([baconData, movieData]) => {
-      BACON_DB = baconData;
+    .then(([baconData1, baconData2, movieData]) => {
+      BACON_DB = {...baconData1, ...baconData2};
       // movie-index.json stores movie title (lowercase) → [actor names (lowercase)]
       // Convert arrays to Sets for fast lookup
       MOVIE_INDEX = {};
@@ -345,63 +346,60 @@ function dbEntry(name) {
 }
 
 function dbVerifyConnection(actorA, actorB, movie) {
-  const norm = s => s.toLowerCase().trim();
+  const norm  = s => s.toLowerCase().trim();
+  // Strip punctuation for fuzzy matching (handles "Crazy, Stupid, Love." vs "Crazy, Stupid, Love")
+  const normP = s => s.toLowerCase().trim().replace(/[.,!?;:'"()-]/g, "").replace(/\s+/g, " ").trim();
+  // Strip year for base title comparison
+  const stripYear = s => s.replace(/\s*\(\d{4}\)\s*$/, "").trim();
+
   const aNorm = norm(actorA);
   const bNorm = norm(actorB);
   const mNorm = norm(movie);
+  const mBase = stripYear(mNorm);      // "crazy, stupid, love (2011)" → "crazy, stupid, love"
+  const mBaseP = normP(mBase);         // "crazy stupid love"
+  const mYear = (mNorm.match(/\((\d{4})\)/) || [])[1]; // "2011" or undefined
 
-  // Strategy 1: exact match
-  const cast = MOVIE_INDEX[mNorm];
-  if (cast && cast.has(aNorm) && cast.has(bNorm)) {
-    return { valid:true, reason:"Verified from local database." };
+  // Helper: check if two movie titles are the same (ignoring punctuation/year)
+  function titlesMatch(key) {
+    if (key === mNorm) return true;                          // exact
+    const kBase = stripYear(key);
+    if (kBase === mBase) return true;                        // same without year
+    if (normP(kBase) === mBaseP) return true;               // same ignoring punctuation
+    // Year-specific: if user typed a year, both must match
+    const kYear = (key.match(/\((\d{4})\)/) || [])[1];
+    if (mYear && kYear && mYear !== kYear) return false;
+    // Partial: one title contains the other (min 6 chars)
+    const longer  = kBase.length > mBase.length ? kBase : mBase;
+    const shorter = kBase.length > mBase.length ? mBase : kBase;
+    if (shorter.length >= 6 && longer.includes(shorter)) return true;
+    // Punctuation-stripped partial
+    const longerP  = normP(kBase).length > mBaseP.length ? normP(kBase) : mBaseP;
+    const shorterP = normP(kBase).length > mBaseP.length ? mBaseP : normP(kBase);
+    if (shorterP.length >= 6 && longerP.includes(shorterP)) return true;
+    return false;
   }
 
-  // Strategy 2: title with year — match "Zombieland" against "Zombieland (2009)"
-  // Also handles user typing "Zombieland (2009)" matching key "zombieland (2009)"
-  const matchingKeys = Object.keys(MOVIE_INDEX).filter(key => {
-    // Strip year from both and compare base titles
-    const baseKey   = key.replace(/\s*\(\d{4}\)\s*$/, "").trim();
-    const baseQuery = mNorm.replace(/\s*\(\d{4}\)\s*$/, "").trim();
-    if (baseKey !== baseQuery) return false;
-    // If user typed a year, make sure it matches
-    const yearQuery = mNorm.match(/\((\d{4})\)/);
-    const yearKey   = key.match(/\((\d{4})\)/);
-    if (yearQuery && yearKey) return yearQuery[1] === yearKey[1];
-    return true;
-  });
-
-  for (const key of matchingKeys) {
-    const titleCast = MOVIE_INDEX[key];
-    if (titleCast && titleCast.has(aNorm) && titleCast.has(bNorm)) {
+  // Search movie index for matching title
+  for (const [key, titleCast] of Object.entries(MOVIE_INDEX)) {
+    if (!titlesMatch(key)) continue;
+    if (titleCast.has(aNorm) && titleCast.has(bNorm)) {
       return { valid:true, reason:"Verified from local database." };
     }
   }
 
-  // Strategy 3: partial title match (handles "Ocean's 11" vs "Ocean's Eleven" etc)
-  for (const [title, titleCast] of Object.entries(MOVIE_INDEX)) {
-    const baseTitle = title.replace(/\s*\(\d{4}\)\s*$/, "").trim();
-    const longer  = baseTitle.length > mNorm.length ? baseTitle : mNorm;
-    const shorter = baseTitle.length > mNorm.length ? mNorm : baseTitle;
-    if (shorter.length >= 6 && longer.includes(shorter)) {
-      if (titleCast.has(aNorm) && titleCast.has(bNorm)) {
-        return { valid:true, reason:"Verified from local database." };
-      }
-    }
-  }
-
-  // Strategy 3: check stored Bacon paths as a fallback
+  // Fallback: check stored Bacon paths
   const entryB = dbEntry(actorB);
   if (entryB) {
     for (const step of entryB.path) {
-      const mMatch = norm(step.movie).includes(mNorm.slice(0,10)) || mNorm.includes(norm(step.movie).slice(0,10));
-      if (mMatch && norm(step.from) === aNorm) return { valid:true, reason:"Verified from local database." };
+      if (titlesMatch(norm(step.movie)) && norm(step.from) === aNorm)
+        return { valid:true, reason:"Verified from local database." };
     }
   }
   const entryA = dbEntry(actorA);
   if (entryA) {
     for (const step of entryA.path) {
-      const mMatch = norm(step.movie).includes(mNorm.slice(0,10)) || mNorm.includes(norm(step.movie).slice(0,10));
-      if (mMatch && norm(step.to) === bNorm) return { valid:true, reason:"Verified from local database." };
+      if (titlesMatch(norm(step.movie)) && norm(step.to) === bNorm)
+        return { valid:true, reason:"Verified from local database." };
     }
   }
 
