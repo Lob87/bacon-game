@@ -476,23 +476,32 @@ async function searchMovies(query) {
   const q = query.toLowerCase().trim();
 
   if (MOVIE_INDEX && Object.keys(MOVIE_INDEX).length > 0) {
-    const exact = [], startsWith = [], wordStarts = [], contains = [];
+    // Priority buckets:
+    // 1. Exact match: "thor" → "thor (2011)"  (base title = query)
+    // 2. Starts with query + space/colon: "thor:" → "thor: love and thunder"
+    // 3. Starts with query but has more letters: "thorax"
+    // 4. A later word starts with query
+    // 5. Contains query anywhere
+    const exactMatch = [], startsClean = [], startsMore = [], wordStarts = [], contains = [];
 
     for (const title of Object.keys(MOVIE_INDEX)) {
-      if (title === q) { exact.push(title); continue; }
-      if (title.startsWith(q)) { startsWith.push(title); continue; }
-      const words = title.split(" ");
+      // Strip year for comparison: "thor (2011)" → "thor"
+      const base = title.replace(/\s*\(\d{4}\)\s*$/, "").trim();
+      if (base === q) { exactMatch.push(title); continue; }
+      if (base.startsWith(q + " ") || base.startsWith(q + ":") || base.startsWith(q + ",")) {
+        startsClean.push(title); continue;
+      }
+      if (base.startsWith(q)) { startsMore.push(title); continue; }
+      const words = base.split(" ");
       if (words.some(w => w.startsWith(q))) { wordStarts.push(title); continue; }
       if (title.includes(q)) contains.push(title);
     }
 
     const getYear = t => { const m = t.match(/\((\d{4})\)$/); return m ? parseInt(m[1]) : 0; };
     const sortNewest = arr => arr.sort((a, b) => getYear(b) - getYear(a));
-    sortNewest(startsWith);
-    sortNewest(wordStarts);
-    sortNewest(contains);
+    [exactMatch, startsClean, startsMore, wordStarts, contains].forEach(sortNewest);
 
-    const combined = [...exact, ...startsWith, ...wordStarts, ...contains];
+    const combined = [...exactMatch, ...startsClean, ...startsMore, ...wordStarts, ...contains];
     const seen = new Set();
     const results = [];
     const skipWords = new Set(["a","an","the","and","but","or","for","of","in","on","at","to","with"]);
