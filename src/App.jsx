@@ -318,14 +318,20 @@ function loadBaconDB() {
     fetch(`${DB_BASE}/bacon-db-1.json`).then(r => r.ok ? r.json() : {}),
     fetch(`${DB_BASE}/bacon-db-2.json`).then(r => r.ok ? r.json() : {}),
     fetch(`${DB_BASE}/movie-index.json`).then(r => r.ok ? r.json() : {}),
+    fetch(`${DB_BASE}/bacon-exceptions.json`).then(r => r.ok ? r.json() : {}),
   ])
-    .then(([baconData1, baconData2, movieData]) => {
+    .then(([baconData1, baconData2, movieData, exceptions]) => {
       BACON_DB = {...baconData1, ...baconData2};
       // movie-index.json stores movie title (lowercase) → [actor names (lowercase)]
       // Convert arrays to Sets for fast lookup
       MOVIE_INDEX = {};
       for (const [title, cast] of Object.entries(movieData)) {
         MOVIE_INDEX[title] = new Set(cast);
+      }
+      // Merge exceptions — add/extend cast lists for known missing entries
+      for (const [title, cast] of Object.entries(exceptions)) {
+        if (!MOVIE_INDEX[title]) MOVIE_INDEX[title] = new Set();
+        for (const actor of cast) MOVIE_INDEX[title].add(actor.toLowerCase());
       }
       console.log(`Loaded Bacon DB: ${Object.keys(BACON_DB).length.toLocaleString()} actors, ${Object.keys(MOVIE_INDEX).length.toLocaleString()} movies indexed`);
       window._BACON_DB = BACON_DB;
