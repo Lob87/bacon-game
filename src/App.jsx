@@ -5,37 +5,38 @@ import { useState, useEffect, useRef } from "react";
 // ─────────────────────────────────────────────────────────────────────────────
 const ACTOR_POOLS = {
   easy: [
-    // Mega-famous A-listers with huge filmographies — everyone knows them
+    // Current/recent era megastars — everyone alive today knows them
     "Tom Hanks","Meryl Streep","Leonardo DiCaprio","Brad Pitt","Julia Roberts",
     "Denzel Washington","George Clooney","Angelina Jolie","Matt Damon","Will Smith",
     "Tom Cruise","Sandra Bullock","Robert De Niro","Al Pacino","Harrison Ford",
-    "Morgan Freeman","Jodie Foster","Dustin Hoffman","Jack Nicholson","Cate Blanchett",
-    "Nicole Kidman","Reese Witherspoon","Halle Berry","Hugh Jackman","Russell Crowe",
-    "Johnny Depp","Nicolas Cage","Sylvester Stallone","Arnold Schwarzenegger","Bruce Willis",
-    "Eddie Murphy","Robin Williams","Jim Carrey","Whoopi Goldberg","Michael Douglas",
-    "Sharon Stone","Demi Moore","Richard Gere","Mel Gibson","Goldie Hawn",
-    "Samuel L. Jackson","Scarlett Johansson","Robert Downey Jr.","Emma Stone","Ryan Gosling",
-    "Chris Evans","Chris Hemsworth","Natalie Portman","Margot Robbie","Anne Hathaway",
-    "Jake Gyllenhaal","Amy Adams","Jessica Chastain","Viola Davis","Idris Elba",
-    "Mahershala Ali","Chadwick Boseman","Michael B. Jordan","Lupita Nyongo","Daniel Craig",
-    "Judi Dench","Anthony Hopkins","Helen Mirren","Ian McKellen","Gary Oldman",
-    "Christian Bale","Joaquin Phoenix","Benedict Cumberbatch","Emily Blunt","Keira Knightley",
-    "Kate Winslet","Rachel Weisz","Sigourney Weaver","Susan Sarandon","Diane Keaton",
-    "Gene Hackman","Robert Duvall","Dustin Hoffman","Warren Beatty","Jack Lemmon",
-    "Walter Matthau","Cary Grant","James Stewart","Henry Fonda","Gregory Peck",
-    "Humphrey Bogart","Katharine Hepburn","Audrey Hepburn","Grace Kelly","Bette Davis",
-    "Marlon Brando","Paul Newman","Steve McQueen","Clint Eastwood","John Wayne",
-    "Sean Connery","Michael Caine","Peter O'Toole","Richard Burton","Laurence Olivier",
-    "Charlize Theron","Halle Berry","Salma Hayek","Penelope Cruz","Catherine Zeta-Jones",
-    "Jennifer Lopez","Jennifer Aniston","Courteney Cox","Lisa Kudrow","Matthew Perry",
-    "Bill Murray","Dan Aykroyd","Chevy Chase","Steve Martin","Martin Short",
-    "John Belushi","Richard Pryor","Gene Wilder","Mel Brooks","Woody Allen",
-    "Liam Neeson","Ewan McGregor","Colin Firth","Hugh Grant","Ralph Fiennes",
+    "Morgan Freeman","Jodie Foster","Jack Nicholson","Cate Blanchett","Nicole Kidman",
+    "Reese Witherspoon","Halle Berry","Hugh Jackman","Russell Crowe","Johnny Depp",
+    "Nicolas Cage","Sylvester Stallone","Arnold Schwarzenegger","Bruce Willis","Eddie Murphy",
+    "Robin Williams","Jim Carrey","Whoopi Goldberg","Michael Douglas","Sharon Stone",
+    "Demi Moore","Richard Gere","Mel Gibson","Samuel L. Jackson","Scarlett Johansson",
+    "Robert Downey Jr.","Emma Stone","Ryan Gosling","Chris Evans","Chris Hemsworth",
+    "Natalie Portman","Margot Robbie","Anne Hathaway","Jake Gyllenhaal","Amy Adams",
+    "Viola Davis","Idris Elba","Chadwick Boseman","Michael B. Jordan","Daniel Craig",
+    "Charlize Theron","Salma Hayek","Penelope Cruz","Jennifer Lopez","Jennifer Aniston",
+    "Bill Murray","Steve Martin","Liam Neeson","Colin Firth","Hugh Grant","Ralph Fiennes",
     "Kevin Costner","Alec Baldwin","Jeff Bridges","Kurt Russell","Tommy Lee Jones",
     "Danny DeVito","Joe Pesci","Ray Liotta","Harvey Keitel","Christopher Walken",
-    "Tim Robbins","John Travolta","Jeff Goldblum","Billy Crystal","Robin Wright",
+    "Tim Robbins","John Travolta","Jeff Goldblum","Billy Crystal",
+    // Classic era — still household names even for younger audiences
+    "Marlon Brando","Paul Newman","Clint Eastwood","John Wayne","Sean Connery",
+    "Dustin Hoffman","Gene Hackman","Robert Duvall","Jack Lemmon","Walter Matthau",
+    "Cary Grant","James Stewart","Humphrey Bogart","Marilyn Monroe","Audrey Hepburn",
   ],
   medium: [
+    // Well known classic Hollywood leads — require some film knowledge
+    "Warren Beatty","Diane Keaton","Susan Sarandon","Sigourney Weaver","Goldie Hawn",
+    "Bette Davis","Katharine Hepburn","Grace Kelly","Henry Fonda","Gregory Peck",
+    "Steve McQueen","Michael Caine","Peter O'Toole","Richard Burton","Laurence Olivier",
+    "Gene Wilder","Richard Pryor","Dan Aykroyd","Chevy Chase","Martin Short",
+    "Woody Allen","Mel Brooks","John Belushi","Warren Beatty","Mahershala Ali",
+    "Jessica Chastain","Lupita Nyong'o","Benedict Cumberbatch","Emily Blunt","Keira Knightley",
+    "Kate Winslet","Rachel Weisz","Judi Dench","Anthony Hopkins","Helen Mirren","Ian McKellen",
+    "Gary Oldman","Christian Bale","Joaquin Phoenix","Ewan McGregor","Robin Wright",
     // Great actors, very well known, but typically supporting or character roles
     "John Goodman","Bill Paxton","Gary Sinise","Joan Cusack","William H. Macy",
     "Steve Buscemi","Stanley Tucci","Tilda Swinton","Catherine Keener","Laura Linney",
@@ -433,22 +434,75 @@ async function findFasterPath(actor) {
 }
 
 async function getHint(currentActor, chain, previousHints=[]) {
-  // Find a co-star of currentActor in the DB who is closer to Kevin Bacon
-  if (!BACON_DB) return null;
-  const entry = dbEntry(currentActor);
-  if (!entry || !entry.path || entry.path.length === 0) return null;
+  if (!BACON_DB || !MOVIE_INDEX) return null;
 
-  // The first step in the actor's own shortest path IS the hint
   const alreadyShown = new Set(previousHints.map(h => h.actor.toLowerCase()));
-  for (const step of entry.path) {
-    const nextActor = step.to;
-    if (!alreadyShown.has(nextActor.toLowerCase())) {
-      return { actor: nextActor, movie: step.movie, reason: `${nextActor} appears in ${currentActor}'s shortest path to Kevin Bacon.` };
+  const chainActors = new Set(chain.map(s => s.to.toLowerCase()));
+  chainActors.add(currentActor.toLowerCase());
+
+  // Strategy: look through every movie the current actor appears in (via movie index)
+  // Find co-stars who have a lower Bacon number than the current actor
+  const currentEntry = dbEntry(currentActor);
+  const currentDegrees = currentEntry ? currentEntry.degrees : 99;
+
+  // Gather movies the current actor is in by scanning the movie index
+  const actorMovies = []; // [{movie, costar, costarDegrees}]
+  const actorNorm = currentActor.toLowerCase();
+
+  for (const [movieTitle, cast] of Object.entries(MOVIE_INDEX)) {
+    if (!cast.includes(actorNorm)) continue;
+    // Find co-stars in this movie who are closer to Kevin Bacon
+    for (const costarNorm of cast) {
+      if (costarNorm === actorNorm) continue;
+      if (alreadyShown.has(costarNorm)) continue;
+      if (chainActors.has(costarNorm)) continue;
+      const costarEntry = dbEntry(costarNorm);
+      if (!costarEntry) continue;
+      if (costarEntry.degrees >= currentDegrees) continue; // must be closer to Bacon
+      // Restore proper casing from DB
+      const costarName = costarEntry.name;
+      actorMovies.push({
+        movie: movieTitle,
+        costar: costarName,
+        costarDegrees: costarEntry.degrees,
+      });
     }
+    if (actorMovies.length > 50) break; // enough candidates
   }
-  // If all path steps shown, suggest any step
-  const step = entry.path[0];
-  return { actor: step.to, movie: step.movie, reason: `Try connecting through ${step.movie}.` };
+
+  if (actorMovies.length === 0) {
+    // Fallback: use stored path if no movie-index match found
+    if (currentEntry && currentEntry.path && currentEntry.path.length > 0) {
+      const step = currentEntry.path[0];
+      if (step.from !== step.to) { // avoid the self-reference bug
+        return { actor: step.to, movie: step.movie, reason: `${step.to} is on the shortest path to Kevin Bacon.` };
+      }
+    }
+    return null;
+  }
+
+  // Sort by closest to Kevin Bacon first, then pick one not already shown
+  actorMovies.sort((a, b) => a.costarDegrees - b.costarDegrees);
+
+  // Restore proper movie title casing
+  const skipWords = new Set(["a","an","the","and","but","or","for","of","in","on","at","to","with"]);
+  const titleCase = t => t.split(" ").map((w, i) =>
+    i === 0 || !skipWords.has(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w
+  ).join(" ");
+
+  const best = actorMovies[0];
+  const deg = best.costarDegrees;
+  const reason = deg === 0
+    ? `${best.costar} IS Kevin Bacon!`
+    : deg === 1
+    ? `${best.costar} has worked directly with Kevin Bacon.`
+    : `${best.costar} is ${deg} degree${deg!==1?"s":""} from Kevin Bacon.`;
+
+  return {
+    actor: best.costar,
+    movie: titleCase(best.movie),
+    reason,
+  };
 }
 
 
@@ -1057,6 +1111,7 @@ export default function App() {
   const [showShare,setShowShare]=useState(false);
   const [showModeSelect,setShowModeSelect]=useState(false);
   const [pendingDiff,setPendingDiff]=useState(null);
+  const [pendingActor,setPendingActor]=useState(null);
 
   // ── Persistent
   const [stats,setStatsState]=useState(loadStats);
@@ -1325,14 +1380,14 @@ export default function App() {
       {showModeSelect&&(
         <Overlay onClose={()=>setShowModeSelect(false)}>
           <h2 className="modal-title">Choose Mode</h2>
-          <p style={{fontSize:"0.82rem",color:"#888",marginBottom:16}}>Starting actor: <strong style={{color:gold}}>{pendingDiff&&pickRandomActor(pendingDiff)}</strong></p>
+          <p style={{fontSize:"0.82rem",color:"#888",marginBottom:16}}>Starting actor: <strong style={{color:gold}}>{pendingActor||""}</strong></p>
           {[
             {mode:"normal",icon:"🎬",name:"Classic",desc:"Connect the actor to Kevin Bacon in 6 steps."},
             {mode:"timed", icon:"⏱️",name:"Timed",  desc:"90 seconds per step. Wrong answers cost 15s."},
             {mode:"reverse",icon:"🔄",name:"Reverse",desc:"Start FROM Kevin Bacon, work outward."},
             {mode:"two_player",icon:"👥",name:"2-Player",desc:"Player 1 picks the actor, Player 2 solves."},
           ].map(({mode,icon,name,desc})=>(
-            <button key={mode} className="mode-btn" onClick={()=>{setShowModeSelect(false);startGame(null,pendingDiff,mode);}}>
+            <button key={mode} className="mode-btn" onClick={()=>{setShowModeSelect(false);startGame(pendingActor,pendingDiff,mode);}}>
               <span className="mode-icon">{icon}</span>
               <span className="mode-name">{name}</span>
               <span className="mode-desc">{desc}</span>
@@ -1406,7 +1461,12 @@ export default function App() {
               {key:"hard",  icon:"💀",name:"Hard",  desc:"Character actors & classics — Buster Keaton, Peter Lorre"},
             ].map(({key,icon,name,desc})=>(
               <button key={key} className={`diff-btn diff-${key}`}
-                onClick={()=>{setPendingDiff(key);setShowModeSelect(true);}}>
+                onClick={()=>{
+                const a=pickRandomActor(key);
+                setPendingDiff(key);
+                setPendingActor(a);
+                setShowModeSelect(true);
+              }}>
                 <span className="diff-icon">{icon}</span>
                 <span className="diff-name">{name}</span>
                 <span className="diff-desc">{desc}</span>
