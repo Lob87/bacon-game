@@ -524,7 +524,7 @@ async function searchMovies(query) {
       }
     }
     return results;
-
+  }
 
   return [];
 }
