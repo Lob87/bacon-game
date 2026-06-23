@@ -312,9 +312,10 @@ let baconDBLoadPromise = null;
 
 function loadBaconDB() {
   if (baconDBLoadPromise) return baconDBLoadPromise;
+  const DB_BASE = "https://pub-91a53781e81e4fa4a098787a7af01773.r2.dev";
   baconDBLoadPromise = Promise.all([
-    fetch("/bacon-db.json").then(r => r.ok ? r.json() : {}),
-    fetch("/movie-index.json").then(r => r.ok ? r.json() : {}),
+    fetch(`${DB_BASE}/bacon-db.json`).then(r => r.ok ? r.json() : {}),
+    fetch(`${DB_BASE}/movie-index.json`).then(r => r.ok ? r.json() : {}),
   ])
     .then(([baconData, movieData]) => {
       BACON_DB = baconData;
