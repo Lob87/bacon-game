@@ -20,12 +20,12 @@ const ACTOR_POOLS = {
     "Charlize Theron","Salma Hayek","Penelope Cruz","Jennifer Lopez","Jennifer Aniston",
     "Bill Murray","Steve Martin","Liam Neeson","Colin Firth","Hugh Grant","Ralph Fiennes",
     "Kevin Costner","Alec Baldwin","Jeff Bridges","Kurt Russell","Tommy Lee Jones",
-    "Danny DeVito","Joe Pesci","Ray Liotta","Harvey Keitel","Christopher Walken",
+    "Danny DeVito","Joe Pesci","Harvey Keitel","Christopher Walken",
     "Tim Robbins","John Travolta","Jeff Goldblum","Billy Crystal",
-    // Classic era — still household names even for younger audiences
+    // Classic era — universally recognized even by younger audiences
     "Marlon Brando","Paul Newman","Clint Eastwood","John Wayne","Sean Connery",
-    "Dustin Hoffman","Gene Hackman","Robert Duvall","Jack Lemmon","Walter Matthau",
-    "Cary Grant","James Stewart","Humphrey Bogart","Marilyn Monroe","Audrey Hepburn",
+    "Gene Hackman","Robert Duvall","Jack Lemmon","Cary Grant","James Stewart",
+    "Humphrey Bogart","Marilyn Monroe","Audrey Hepburn",
   ],
   medium: [
     // Well known classic Hollywood leads — require some film knowledge
@@ -1180,7 +1180,7 @@ export default function App() {
   }
 
   function pickRandomActor(diff){
-    const pool=ACTOR_POOLS[diff||difficulty];
+    const pool=ACTOR_POOLS[diff] || ACTOR_POOLS[difficulty] || ACTOR_POOLS.easy;
     return pool[Math.floor(Math.random()*pool.length)];
   }
 
@@ -1380,7 +1380,6 @@ export default function App() {
       {showModeSelect&&(
         <Overlay onClose={()=>setShowModeSelect(false)}>
           <h2 className="modal-title">Choose Mode</h2>
-          <p style={{fontSize:"0.82rem",color:"#888",marginBottom:16}}>Starting actor: <strong style={{color:gold}}>{pendingActor||""}</strong></p>
           {[
             {mode:"normal",icon:"🎬",name:"Classic",desc:"Connect the actor to Kevin Bacon in 6 steps."},
             {mode:"timed", icon:"⏱️",name:"Timed",  desc:"90 seconds per step. Wrong answers cost 15s."},
@@ -1465,7 +1464,8 @@ export default function App() {
                 const a=pickRandomActor(key);
                 setPendingDiff(key);
                 setPendingActor(a);
-                setShowModeSelect(true);
+                // Small timeout ensures state settles before modal renders
+                setTimeout(()=>setShowModeSelect(true), 0);
               }}>
                 <span className="diff-icon">{icon}</span>
                 <span className="diff-name">{name}</span>
